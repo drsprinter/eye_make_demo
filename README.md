@@ -39,3 +39,8 @@ Root Directory: 空欄（リポジトリ直下）。Build Command: `pip install 
 - 画像はNPZに含まれません。実画像を `Eyemake4/` に保管してください。
 - サーバーのメモリにセッションを保持。再起動で消え、複数ワーカーを使うとセッションが見えなくなるためデモは1ワーカー運用。
 - 履歴CSVをダウンロードできます。個人情報を本番収集するなら永続DBと同意・アクセス管理が必要。
+
+
+## 2026-10-29: Renderの画面エラー修正
+
+`Cannot set properties of null (setting 'textContent')` は新旧HTML/JSが混在した場合に起こります。`web/index.html`、`web/app.js`、`web/style.css`、`backend/main.py` を必ず同じ版で反映してください。今回の修正ではJS/CSSのクエリにバージョンを付け、HTMLと静的ファイルには `Cache-Control: no-store` を指定しました。Chromeでは Cmd+Shift+R で強制再読み込みしてください。

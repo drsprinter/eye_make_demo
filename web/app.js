@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 let sessionId = null, busy = false;
-function notice(msg){let n=$('notice'); n.textContent=msg||'';n.hidden=!msg;}
+function notice(msg){let n=$('notice'); if(!n){console.error(msg);return;} n.textContent=msg||'';n.hidden=!msg;}
 async function api(path, options={}){
   let response;
   try {response=await fetch(path,{...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}});}
@@ -40,6 +40,14 @@ async function showResults(){try{
 }catch(e){notice(e.message);}}
 function reset(){sessionId=null;$('welcome').hidden=false;$('workspace').hidden=true;notice('');}
 async function init(){try{const d=await api('/api/health');$('datasetBadge').textContent=`${d.images} 枚 · ${d.dimensions}次元`;if(d.missing_images)notice(`${d.missing_images}枚の画像が見つかりません。`);}catch(e){$('datasetBadge').textContent='データ未準備';notice(e.message);}}
+// Detect mixed HTML/JavaScript versions instead of crashing on a null element.
+const requiredIds=['notice','datasetBadge','welcome','workspace','pairView','ratingView','resultsView','progressLabel','countLabel','leftImg','rightImg','leftName','rightName','candidateImg','candidateName','resultsGrid','startBtn','resetBtn','exportBtn'];
+const missingIds=requiredIds.filter(id=>!$(id));
+if(missingIds.length){
+  const message='画面ファイルのバージョンが一致しません。再デプロイしてブラウザを強制再読み込みしてください。不足ID: '+missingIds.join(', ');
+  notice(message);
+  throw new Error(message);
+}
 $('startBtn').addEventListener('click',start);
 document.querySelectorAll('[data-choice]').forEach(b=>b.addEventListener('click',()=>submit('votes',{choice:b.dataset.choice})));
 document.querySelectorAll('[data-rating]').forEach(b=>b.addEventListener('click',()=>submit('ratings',{rating:Number(b.dataset.rating)})));

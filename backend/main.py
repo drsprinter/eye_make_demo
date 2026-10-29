@@ -22,13 +22,13 @@ sessions = {}
 
 @app.get('/', include_in_schema=False)
 def homepage():
-    return FileResponse(WEB_DIR / 'index.html')
+    return FileResponse(WEB_DIR / 'index.html', headers={'Cache-Control': 'no-store, max-age=0'})
 
 @app.get('/assets/{filename}', include_in_schema=False)
 def assets(filename: str):
     if filename not in {'style.css', 'app.js'}:
         raise HTTPException(404, 'Not Found')
-    return FileResponse(WEB_DIR / filename)
+    return FileResponse(WEB_DIR / filename, headers={'Cache-Control': 'no-store, max-age=0'})
 
 
 def load_dataset():
