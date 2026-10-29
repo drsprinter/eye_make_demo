@@ -1,41 +1,41 @@
-# Eye Makeup Preference Lab — Render一体型版
+# Eye Makeup Preference Lab — 2-stage Render Edition
 
-FastAPIが `/` でHTML/CSS/JavaScript画面を配信します。StreamlitとCLIPの実行環境は不要です。
+CLIPはアプリ上では実行しません。`Eyemake4/clip_embeddings.npz` の `paths` と `embeddings` を読み、同じフォルダの画像を表示します。
 
-## データ配置
+## 構成
 
-```
-eye_makeup_render_web/
-├── backend/main.py, backend/preference.py
-├── web/index.html, web/app.js, web/style.css
-├── Eyemake4/
-│   ├── clip_embeddings.npz
-│   └── （NPZのpathsに含まれる画像300枚）
-├── requirements.txt
-└── render.yaml
-```
+- `backend/main.py`: FastAPI / API / 画像の配信
+- `backend/preference.py`: 20問の4択比較と、10枚の5段階評価
+- `web/`: 単一URLで動くHTML/CSS/JSフロント
+- `Eyemake4/`: ユーザーが用意するNPZと実画像（同梱なし）
 
-**注意:** NPZには画像本体は含まれていません。`Eyemake4/` に元画像も必要です。`paths` 配列内のファイル名・相対パスと一致するように置いてください。画像とNPZは配布ZIPに含まれていません。
-
-## ローカル実行
+## 起動
 
 ```bash
-python -m pip install -r requirements.txt
-python -m uvicorn backend.main:app --reload --port 8000
+pip install -r requirements.txt
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-- ブラウザ: http://localhost:8000/
-- API Docs: http://localhost:8000/docs
-- Health: http://localhost:8000/api/health
+ブラウザで `http://localhost:8000/`。
 
-## Render
+Render の Start Command:
 
-- Root Directory: 空欄（リポジトリのルートがこの構成の場合）
-- Build Command: `pip install -r requirements.txt`
-- Start Command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
-- GitHubに `web/`, `backend/`, `Eyemake4/` のデータ、`requirements.txt` をコミットし、再デプロイしてください。
-- 公開URLの `/` がデモ画面になります。
+```bash
+uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+```
 
-API: セッション作成、2画像比較、4段階投票、スキップ、推薦、CSV出力、画像配信。学習履歴はメモリ上に保持され、サーバー再起動で消去されます。Renderの複数ワーカー/インスタンス構成ではセッション共有されません。個人情報・識別情報は送信しないでください。
+Root Directory: 空欄（リポジトリ直下）。Build Command: `pip install -r requirements.txt`。
 
-既存の `frontend/` は旧Streamlit版の参考ファイルです。新しい公開フロントは `web/` です。
+## アルゴリズム（試作版）
+
+1. STEP 1: 20組、左右・両方好き・両方好みではないの4択。左右選択では選択画像を正例、非選択画像を負例。両方好きでは各画像を0.5ずつ正例、両方好みでない場合は0.5ずつ負例として蓄積し、`normalize(positive - negative)` を長期選好とする。計20問で確定して凍結。
+2. STEP 2: 長期ベクトルとのコサイン類似度が高い未表示画像から10枚を提示（上位40枚の範囲で分散）。1〜5の評価を `(rating - 3) / 2` で重み付けして加算し、正規化して補正ベクトルとする。3は中立。
+3. 最終ランキング: `normalize(0.7 * long_vector + 0.3 * short_vector)` との類似度順にTOP10を表示。1〜2と回答した画像は除外。
+
+※ `70:30`、10枚、ペア選択方針はデモ用の暫定設定。研究に利用する前に固定・事前登録を推奨します。評価・推奨は確率的推定であり、適合度の保証ではありません。20問では個人の長期的な嗜好の安定性は実証できず、正しくは「20問から推定した長期選好ベクトル」です。
+
+## 注意
+
+- 画像はNPZに含まれません。実画像を `Eyemake4/` に保管してください。
+- サーバーのメモリにセッションを保持。再起動で消え、複数ワーカーを使うとセッションが見えなくなるためデモは1ワーカー運用。
+- 履歴CSVをダウンロードできます。個人情報を本番収集するなら永続DBと同意・アクセス管理が必要。

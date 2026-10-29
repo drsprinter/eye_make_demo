@@ -1,92 +1,126 @@
-"""Preference learning and adaptive pair sampling; pure numpy, testable."""
-from dataclasses import dataclass, field
-from typing import Optional
+"""Two-stage preference study: 20 four-choice pairs, then 10 five-star ratings."""
 import numpy as np
 
-
-def normalize(v):
-    norm = np.linalg.norm(v)
-    return v / norm if norm > 1e-9 else np.zeros_like(v)
+PAIR_ROUNDS = 20
+RATING_ROUNDS = 10
 
 
-@dataclass
+def unit(x):
+    x = np.asarray(x, dtype=np.float32)
+    n = float(np.linalg.norm(x))
+    return x / n if n > 1e-8 else np.zeros_like(x)
+
+
 class PreferenceSession:
-    embeddings: np.ndarray
-    decay: float = 0.85
-    alpha: float = 0.45
-    beta: float = 0.45
-    stretch_weight: float = 1.6
-    frontier_weight: float = 1.4
-    seed: int = 42
-    user_vector: np.ndarray = field(init=False)
-    seen: set = field(default_factory=set)
-    count: int = 0
-    history: list = field(default_factory=list)
-    last_pair: Optional[tuple] = None
-    rng: np.random.Generator = field(init=False)
-
-    def __post_init__(self):
-        self.embeddings = np.asarray(self.embeddings, dtype=np.float32)
-        if self.embeddings.ndim != 2 or len(self.embeddings) < 2:
-            raise ValueError('At least two image vectors are required')
-        self.embeddings = np.stack([normalize(v) for v in self.embeddings])
-        self.user_vector = np.zeros(self.embeddings.shape[1], dtype=np.float32)
-        self.rng = np.random.default_rng(self.seed)
+    def __init__(self, embeddings, seed=None):
+        x = np.asarray(embeddings, dtype=np.float32)
+        if x.ndim != 2 or len(x) < PAIR_ROUNDS * 2 + RATING_ROUNDS or not np.isfinite(x).all():
+            raise ValueError('At least 50 valid image embeddings required')
+        self.x = np.array([unit(v) for v in x], dtype=np.float32)
+        self.rng = np.random.default_rng(seed)
+        self.phase = 'pair'
+        self.pair_count = 0
+        self.rating_count = 0
+        self.pair = None
+        self.candidate = None
+        self.seen = set()
+        self.rated = set()
+        self.history = []
+        self.positive = np.zeros(x.shape[1], dtype=np.float32)
+        self.negative = np.zeros(x.shape[1], dtype=np.float32)
+        self.long_vector = np.zeros(x.shape[1], dtype=np.float32)
+        self.short_raw = np.zeros(x.shape[1], dtype=np.float32)
+        self.short_vector = np.zeros(x.shape[1], dtype=np.float32)
+        self.select_pair()
 
     def select_pair(self):
-        n = len(self.embeddings)
-        pool = np.array([i for i in range(n) if i not in self.seen], dtype=int)
-        if len(pool) < 2:
-            self.seen.clear()
-            pool = np.arange(n)
-        if self.count == 0 or np.linalg.norm(self.user_vector) < 1e-9:
-            first = int(self.rng.choice(pool))
-            candidates = pool[pool != first]
-            # Cold-start diversity: choose an image relatively different from first.
-            second = int(candidates[np.argmin(self.embeddings[candidates] @ self.embeddings[first])])
+        if self.phase != 'pair':
+            return None
+        available = np.array([i for i in range(len(self.x)) if i not in self.seen], dtype=int)
+        if len(available) < 2:
+            raise ValueError('Not enough unshown images for 20 comparisons')
+        # Diverse, without replacement. Bias second toward semantic contrast.
+        a = int(self.rng.choice(available))
+        remaining = available[available != a]
+        distance = 1 - self.x[remaining] @ self.x[a]
+        top = np.argsort(distance)[-min(15, len(remaining)):]
+        b = int(self.rng.choice(remaining[top]))
+        self.pair = (a, b)
+        self.seen.update((a, b))
+        return self.pair
+
+    def vote(self, choice):
+        if self.phase != 'pair' or self.pair is None:
+            raise ValueError('Pair phase not active')
+        if choice not in ('left', 'right', 'both_like', 'both_dislike'):
+            raise ValueError('Invalid comparison choice')
+        a, b = self.pair
+        # All choices provide directional evidence; both-like and both-dislike
+        # respectively add positive and negative evidence for BOTH exemplars.
+        if choice == 'left':
+            self.positive += self.x[a]
+            self.negative += self.x[b]
+        elif choice == 'right':
+            self.positive += self.x[b]
+            self.negative += self.x[a]
+        elif choice == 'both_like':
+            self.positive += 0.5 * (self.x[a] + self.x[b])
         else:
-            sim = self.embeddings[pool] @ self.user_vector
-            # Cycle through 4:6:2 safe/stretch/frontier, using ranking regions.
-            mode = ['safe'] * 4 + ['stretch'] * 6 + ['frontier'] * 2
-            category = mode[self.count % len(mode)]
-            order = np.argsort(sim)[::-1]
-            if category == 'safe':
-                segment = order[:max(2, len(order) // 3)]
-            elif category == 'stretch':
-                lo, hi = len(order) // 4, max(len(order) // 4 + 2, (3 * len(order)) // 4)
-                segment = order[lo:hi]
-            else:
-                segment = order[max(0, (2 * len(order)) // 3):]
-            first = int(self.rng.choice(pool[segment]))
-            other = pool[pool != first]
-            # Second image is near first on user preference axis, but visually different.
-            axis_delta = np.abs((self.embeddings[other] - self.embeddings[first]) @ self.user_vector)
-            diversity = 1 - self.embeddings[other] @ self.embeddings[first]
-            novelty = np.array([0 if i not in self.seen else 0.4 for i in other])
-            utility = -axis_delta + 0.25 * diversity - novelty
-            top = np.argsort(utility)[-min(8, len(utility)):]
-            second = int(self.rng.choice(other[top]))
-        self.seen.update([first, second])
-        self.last_pair = (first, second)
-        return self.last_pair
+            self.negative += 0.5 * (self.x[a] + self.x[b])
+        self.pair_count += 1
+        self.history.append({'phase': 'pair', 'round': self.pair_count, 'left': a, 'right': b, 'choice': choice, 'image': '', 'rating': ''})
+        self.pair = None
+        # Run the entire study using the progressively updated estimate.
+        self.long_vector = unit(self.positive - self.negative)
+        if self.pair_count == PAIR_ROUNDS:
+            self.phase = 'rating'
+            self.select_candidate()
+        else:
+            self.select_pair()
 
-    def vote(self, choice: str):
-        if self.last_pair is None:
-            raise ValueError('Call select_pair first')
-        # Strong / slight preference for left or right; ties are skipped.
-        strength = {'left_strong': 1.0, 'left_slight': 0.5, 'right_slight': -0.5, 'right_strong': -1.0, 'skip': 0.0}[choice]
-        a, b = self.last_pair
-        if strength:
-            direction = self.embeddings[a] - self.embeddings[b]
-            # Normalize after each update, as in the original preference-vector formulation.
-            self.user_vector = normalize(self.decay * self.user_vector + self.alpha * strength * direction).astype('float32')
-        self.history.append({'round': self.count + 1, 'left': a, 'right': b, 'choice': choice})
-        self.count += 1
-        self.last_pair = None
+    def select_candidate(self):
+        if self.phase != 'rating':
+            return None
+        remaining = np.array([i for i in range(len(self.x)) if i not in self.rated and i not in self.seen], dtype=int)
+        if not len(remaining):
+            raise ValueError('No unrated images remain')
+        # Sample from highly aligned long-term preferences; slight diversity in
+        # rank prevents showing only visually near-identical images.
+        sim = self.x[remaining] @ self.long_vector
+        order = np.argsort(-sim)
+        shortlist = remaining[order[:min(40, len(order))]]
+        # Scan high-ranked candidates with controlled exploration.
+        idx = min(len(shortlist) - 1, (self.rating_count * 3) % max(len(shortlist), 1))
+        self.candidate = int(shortlist[idx])
+        return self.candidate
 
-    def ranking(self, count=12):
-        if np.linalg.norm(self.user_vector) < 1e-9:
-            return np.arange(min(count, len(self.embeddings))), np.zeros(min(count, len(self.embeddings)))
-        scores = self.embeddings @ self.user_vector
-        indices = np.argsort(-scores)[:count]
-        return indices, scores[indices]
+    def rate(self, rating):
+        if self.phase != 'rating' or self.candidate is None:
+            raise ValueError('Rating phase not active')
+        if not isinstance(rating, int) or rating not in (1, 2, 3, 4, 5):
+            raise ValueError('Rating must be an integer from 1 to 5')
+        i = self.candidate
+        # 3 is neutral. Negative ratings move the session vector away.
+        self.short_raw += (rating - 3) / 2 * self.x[i]
+        self.short_vector = unit(self.short_raw)
+        self.rated.add(i)
+        self.rating_count += 1
+        self.history.append({'phase': 'rating', 'round': self.rating_count, 'left': '', 'right': '', 'choice': '', 'image': i, 'rating': rating})
+        self.candidate = None
+        if self.rating_count == RATING_ROUNDS:
+            self.phase = 'done'
+        else:
+            self.select_candidate()
+
+    def ranking(self, limit=10):
+        # Long-term portrait is frozen after round 20; short-term refines it.
+        if np.linalg.norm(self.short_vector) > 1e-8:
+            profile = unit(0.7 * self.long_vector + 0.3 * self.short_vector)
+        else:
+            profile = self.long_vector
+        scores = self.x @ profile
+        # Never recommend explicitly rejected rated images (ratings 1-2).
+        rejected = {int(h['image']) for h in self.history if h['phase'] == 'rating' and h['rating'] <= 2}
+        eligible = np.array([i for i in range(len(self.x)) if i not in rejected], dtype=int)
+        order = eligible[np.argsort(-scores[eligible])][:limit]
+        return order, scores[order]
