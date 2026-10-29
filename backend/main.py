@@ -19,6 +19,20 @@ NPZ_PATH = ASSETS / 'clip_embeddings.npz'
 app = FastAPI(title='Eye Makeup Preference API', version='1.0.0')
 lock = threading.RLock()
 sessions = {}
+WEB_DIR = ROOT / 'web'
+
+
+@app.get('/', include_in_schema=False)
+def home():
+    return FileResponse(WEB_DIR / 'index.html', media_type='text/html')
+
+
+@app.get('/assets/{filename}', include_in_schema=False)
+def web_asset(filename: str):
+    if filename not in {'style.css', 'app.js'}:
+        raise HTTPException(status_code=404, detail='Not Found')
+    return FileResponse(WEB_DIR / filename)
+
 
 
 def load_dataset():

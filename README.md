@@ -1,67 +1,41 @@
-# Eye Makeup Preference Lab — Full Stack
+# Eye Makeup Preference Lab — Render一体型版
 
-事前計算した CLIP 埋め込みから、2画像比較・選好学習・推薦を行うデモ。**CLIP、PyTorch、images/、事前計算スクリプトは不要です。**
+FastAPIが `/` でHTML/CSS/JavaScript画面を配信します。StreamlitとCLIPの実行環境は不要です。
 
-## 構成
+## データ配置
 
-```text
-eye_makeup_fullstack/
+```
+eye_makeup_render_web/
+├── backend/main.py, backend/preference.py
+├── web/index.html, web/app.js, web/style.css
 ├── Eyemake4/
-│   ├── clip_embeddings.npz   ← ご自身の生成済みファイル
-│   └── (元画像300枚)          ← NPZのpathsで参照する元画像
-├── backend/
-│   ├── __init__.py
-│   ├── main.py               ← FastAPI API / 画像配信 / CSV出力
-│   └── preference.py         ← CLIPベクトル上の選好学習
-├── frontend/
-│   └── app.py                ← Streamlit画面（APIクライアント）
-└── requirements.txt
+│   ├── clip_embeddings.npz
+│   └── （NPZのpathsに含まれる画像300枚）
+├── requirements.txt
+└── render.yaml
 ```
 
-NPZ は `embeddings`（N×512などのfloat配列）、`paths`（Eyemake4からの相対パス配列）、任意の `model` を含む形式に対応します。NPZに画像の実体は入っていないので、画像ファイルは必要です。
+**注意:** NPZには画像本体は含まれていません。`Eyemake4/` に元画像も必要です。`paths` 配列内のファイル名・相対パスと一致するように置いてください。画像とNPZは配布ZIPに含まれていません。
 
-## 起動
-
-Python 3.9以降を想定。プロジェクトのルートフォルダで実行：
+## ローカル実行
 
 ```bash
 python -m pip install -r requirements.txt
-```
-
-**ターミナル1（バックエンド）**
-```bash
 python -m uvicorn backend.main:app --reload --port 8000
 ```
 
-- 接続確認: http://127.0.0.1:8000/api/health
-- API仕様: http://127.0.0.1:8000/docs
+- ブラウザ: http://localhost:8000/
+- API Docs: http://localhost:8000/docs
+- Health: http://localhost:8000/api/health
 
-**ターミナル2（フロントエンド）**
-```bash
-python -m streamlit run frontend/app.py
-```
+## Render
 
-http://localhost:8501 を開きます。
+- Root Directory: 空欄（リポジトリのルートがこの構成の場合）
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+- GitHubに `web/`, `backend/`, `Eyemake4/` のデータ、`requirements.txt` をコミットし、再デプロイしてください。
+- 公開URLの `/` がデモ画面になります。
 
-バックエンドを別の場所で動かす場合、`EYEMAKE_API_URL` 環境変数を設定してください。例：`EYEMAKE_API_URL=http://127.0.0.1:8000 python -m streamlit run frontend/app.py`。
+API: セッション作成、2画像比較、4段階投票、スキップ、推薦、CSV出力、画像配信。学習履歴はメモリ上に保持され、サーバー再起動で消去されます。Renderの複数ワーカー/インスタンス構成ではセッション共有されません。個人情報・識別情報は送信しないでください。
 
-## API
-
-| Method | Path | 説明 |
-|---|---|---|
-| GET | `/api/health` | 画像数・特徴量次元・不足画像数 |
-| POST | `/api/sessions` | 選好学習セッション作成 |
-| GET | `/api/sessions/{id}` | 現在の提示画像と履歴 |
-| POST | `/api/sessions/{id}/votes` | 4択またはスキップを送信 |
-| GET | `/api/sessions/{id}/recommendations?limit=12` | 推薦画像・スコア |
-| GET | `/api/sessions/{id}/history.csv` | 評価履歴をCSV出力 |
-| GET | `/images/{index}` | 元画像配信 |
-
-投票 `choice` は `left_strong`, `left_slight`, `right_slight`, `right_strong`, `skip` のいずれか。
-
-## 注意
-
-- セッションはバックエンドの**メモリ上**に保持され、サーバー停止・再起動で失われます。必要な評価履歴はCSV出力してください。
-- APIには認証がありません。**ローカル利用前提**です。インターネット公開には認証、永続データベース、利用者管理、CORS/プロキシ設定等が必要です。
-- `safe/stretch/frontier=4:6:2` は既存版から引き継いだ**簡易サンプリング**です。厳密な研究実験用ロジックの実装ではありません。
-- 元画像のパスはNPZ内の相対パスを解決します。`Eyemake4` 外へのアクセスは禁止しています。
+既存の `frontend/` は旧Streamlit版の参考ファイルです。新しい公開フロントは `web/` です。

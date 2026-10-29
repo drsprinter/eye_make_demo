@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#fcf9fb"><title>Eye Makeup Preference Lab</title><link rel="stylesheet" href="/assets/style.css"></head>
+<body><main class="shell">
+<header class="top"><div><div class="eyebrow">PERSONAL BEAUTY EXPLORATION</div><h1>Eye Makeup <span>Preference Lab</span></h1><p>自分の「好き」から、まだ知らないアイメイクに出会う。</p></div><div class="topbadge" id="datasetBadge">データ確認中…</div></header>
+<div id="notice" class="notice" role="alert" hidden></div>
+<section class="start" id="welcome"><h2>あなたの「好き」を探そう</h2><p>2つのアイメイクを見比べて、より惹かれる方を選んでください。回答に合わせて、次の画像が変化していきます。</p><button id="startBtn" class="primary">比較をはじめる</button><p class="hint">学習結果はこのサーバーの一時セッションに保存されます。必要な場合はCSVで履歴を保存してください。</p></section>
+<section id="workspace" hidden><div class="toolbar"><div class="stats"><strong id="roundLabel">Round 1</strong><span id="countLabel">0 回回答</span></div><div class="toolbar-right"><button id="resultsBtn" class="quiet">おすすめを見る</button><button id="exportBtn" class="quiet">CSVを保存</button><button id="resetBtn" class="quiet">最初から</button></div></div>
+<div id="compareView"><h2 class="section-title">どちらのアイメイクに惹かれる？</h2><div class="compare-grid"><article class="look"><div class="look-title">LOOK A</div><div class="photo"><img id="leftImg" alt="比較するアイメイク A"></div><div id="leftName" class="filename"></div></article><article class="look"><div class="look-title">LOOK B</div><div class="photo"><img id="rightImg" alt="比較するアイメイク B"></div><div id="rightName" class="filename"></div></article></div>
+<div class="actions"><button data-vote="left_strong">A がとても好き</button><button data-vote="left_slight">A が少し好き</button><button data-vote="right_slight">B が少し好き</button><button data-vote="right_strong">B がとても好き</button></div><div class="center"><button data-vote="skip" class="quiet">どちらも選べない・スキップ</button></div></div>
+<div id="resultsView" hidden><div class="results-head"><div><h2 class="section-title">今のあなたに近いアイメイク</h2><p class="subtle" id="trainedNote"></p></div><button id="backBtn" class="primary">比較に戻る</button></div><div id="resultsGrid" class="results-grid"></div></div></section>
+<footer>Eye Makeup Preference Lab · CLIP特徴量を使った選好学習デモ</footer></main><script src="/assets/app.js" defer></script></body></html>
