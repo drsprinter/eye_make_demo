@@ -37,8 +37,8 @@ def load_dataset():
     with np.load(NPZ_PATH, allow_pickle=False) as z:
         names = [str(s) for s in z['paths']]
         vectors = np.asarray(z['embeddings'], dtype=np.float32)
-    if vectors.ndim != 2 or len(names) != len(vectors) or len(names) < 50 or not np.isfinite(vectors).all():
-        raise ValueError('NPZ must have >= 50 valid vectors and matching paths')
+    if vectors.ndim != 2 or len(names) != len(vectors) or len(names) < 2 * PAIR_ROUNDS + RATING_ROUNDS or not np.isfinite(vectors).all():
+        raise ValueError('NPZ must have >= 30 valid vectors and matching paths')
     paths = []
     for name in names:
         path = (ASSETS / name).resolve()
@@ -138,7 +138,7 @@ def recommendations(sid: str):
     with lock:
         s = session(sid)
         if s.phase != 'done':
-            raise HTTPException(409, 'Complete all 20 comparisons and 10 ratings first')
+            raise HTTPException(409, 'Complete all 10 comparisons and 10 ratings first')
         ids, scores = s.ranking(10)
         return {'items': [{**image_info(i, names), 'score': float(sc)} for i, sc in zip(ids, scores)],
                 'pair_completed': s.pair_count, 'rating_completed': s.rating_count}

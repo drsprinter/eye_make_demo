@@ -14,16 +14,16 @@ function disable(flag){busy=flag;document.querySelectorAll('button').forEach(b=>
 function render(state){
   ['pairView','ratingView','resultsView'].forEach(id=>$(id).hidden=true);
   if(state.phase==='pair'){
-    $('progressLabel').textContent='STEP 1 / 2';$('countLabel').textContent=`比較 ${state.pair_completed+1} / 20`;
+    $('progressLabel').textContent='STEP 1 / 2';$('countLabel').textContent=`比較 ${state.pair_completed+1} / ${state.pair_total}`;
     $('leftImg').src=state.pair.left.url;$('rightImg').src=state.pair.right.url;
     $('leftName').textContent=state.pair.left.name;$('rightName').textContent=state.pair.right.name;
     $('pairView').hidden=false;
   }else if(state.phase==='rating'){
-    $('progressLabel').textContent='STEP 2 / 2';$('countLabel').textContent=`5段階評価 ${state.rating_completed+1} / 10`;
+    $('progressLabel').textContent='STEP 2 / 2';$('countLabel').textContent=`5段階評価 ${state.rating_completed+1} / ${state.rating_total}`;
     $('candidateImg').src=state.candidate.url;$('candidateName').textContent=state.candidate.name;
     $('ratingView').hidden=false;
   }else{
-    $('progressLabel').textContent='COMPLETE';$('countLabel').textContent='比較20問 ＋ 5段階評価10問';
+    $('progressLabel').textContent='COMPLETE';$('countLabel').textContent=`比較${state.pair_total}問 ＋ 5段階評価${state.rating_total}問`;
     showResults();
   }
 }

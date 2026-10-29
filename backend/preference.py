@@ -1,7 +1,7 @@
-"""Two-stage preference study: 20 four-choice pairs, then 10 five-star ratings."""
+"""Two-stage preference study: 10 four-choice pairs, then 10 five-star ratings."""
 import numpy as np
 
-PAIR_ROUNDS = 20
+PAIR_ROUNDS = 10
 RATING_ROUNDS = 10
 
 
@@ -15,7 +15,7 @@ class PreferenceSession:
     def __init__(self, embeddings, seed=None):
         x = np.asarray(embeddings, dtype=np.float32)
         if x.ndim != 2 or len(x) < PAIR_ROUNDS * 2 + RATING_ROUNDS or not np.isfinite(x).all():
-            raise ValueError('At least 50 valid image embeddings required')
+            raise ValueError('At least 30 valid image embeddings required')
         self.x = np.array([unit(v) for v in x], dtype=np.float32)
         self.rng = np.random.default_rng(seed)
         self.phase = 'pair'
@@ -38,7 +38,7 @@ class PreferenceSession:
             return None
         available = np.array([i for i in range(len(self.x)) if i not in self.seen], dtype=int)
         if len(available) < 2:
-            raise ValueError('Not enough unshown images for 20 comparisons')
+            raise ValueError('Not enough unshown images for 10 comparisons')
         # Diverse, without replacement. Bias second toward semantic contrast.
         a = int(self.rng.choice(available))
         remaining = available[available != a]
@@ -113,7 +113,7 @@ class PreferenceSession:
             self.select_candidate()
 
     def ranking(self, limit=10):
-        # Long-term portrait is frozen after round 20; short-term refines it.
+        # Long-term portrait is frozen after round 10; short-term refines it.
         if np.linalg.norm(self.short_vector) > 1e-8:
             profile = unit(0.7 * self.long_vector + 0.3 * self.short_vector)
         else:
